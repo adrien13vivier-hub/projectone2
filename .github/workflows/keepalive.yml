@@ -1,1 +1,51 @@
-placeholder
+name: Keep-Alive
+# GitHub désactive les crons après 60 jours d'inactivité.
+# Ce workflow se lance chaque lundi pour maintenir le repo actif.
+# CORRECTION v2 : on déclenche aussi daily_analysis via workflow_dispatch
+# pour s'assurer qu'il reste activé (les commits seuls ne suffisent pas
+# à réactiver un workflow schedulé désactivé par GitHub).
+on:
+  schedule:
+    - cron: "0 7 * * 1"  # Chaque lundi à 07h00 UTC
+  workflow_dispatch:
+
+jobs:
+  keepalive:
+    name: Maintien activité repo
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: write   # CORRECTION : nécessaire pour déclencher workflow_dispatch
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ping keep-alive (commit minimal)
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          echo "$(date -u '+%Y-%m-%d %H:%M UTC')" >> .keepalive
+          git add .keepalive
+          git commit -m "💓 keep-alive $(date -u '+%Y-%m-%d')"
+          git push
+
+      # CORRECTION : réactiver daily_analysis s'il a été désactivé par GitHub.
+      - name: Re-enable daily_analysis workflow if needed
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          REPO="${{ github.repository }}"
+          WORKFLOW="daily_analysis.yml"
+          STATE=$(gh api repos/$REPO/actions/workflows/$WORKFLOW --jq '.state' 2>/dev/null || echo "unknown")
+          echo "État du workflow $WORKFLOW : $STATE"
+          if [ "$STATE" = "disabled_inactivity" ] || [ "$STATE" = "disabled_manually" ]; then
+            echo "⚠️ Workflow $WORKFLOW désactivé ($STATE) — réactivation en cours..."
+            gh api repos/$REPO/actions/workflows/$WORKFLOW/enable -X PUT
+            echo "✅ Workflow $WORKFLOW réactivé."
+          else
+            echo "✅ Workflow $WORKFLOW actif ($STATE) — aucune action requise."
+          fi
+          DAY_OF_WEEK=$(date -u '+%u')
+          if [ "$DAY_OF_WEEK" = "1" ]; then
+            echo "📅 Lundi détecté — déclenchement workflow_dispatch sur daily_analysis..."
+            gh workflow run $WORKFLOW --repo $REPO 2>/dev/null && echo "✅ Déclenché." || echo "ℹ️ Déjà déclenché aujourd'hui ou erreur."
+          fi
