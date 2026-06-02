@@ -1,1 +1,16 @@
-placeholder
+# Ce workflow est désactivé — la génération HTML est maintenant intégrée dans daily_analysis.yml
+# Fichier conservé pour référence uniquement
+name: Generate Page (DISABLED)
+
+on:
+  workflow_dispatch:
+    inputs:
+      disabled:
+        description: 'Ce workflow est désactivé, utiliser daily_analysis.yml'
+        required: false
+
+jobs:
+  placeholder:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Ce workflow est désactivé. La génération HTML est intégrée dans daily_analysis.yml"
